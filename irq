@@ -1,0 +1,16 @@
+softirq
+	can run on different cpu. so need locking on smp
+tasklet
+	only one instance can run even on smp. so no need locking
+Non-preempt Non-re-entry
+	different CPU reentry
+DPC
+	running context
+	concurrency and locking
+workqueue
+	if the dpc need to sleep, then use workqueue. It's a queue to store all the work need to do and kernel will call it in a kernel thread context
+
+preempt-disable
+	spin_lock\unlock will dispable preempt
+	rcu_read_lock\unlock?
+	get_cpu\get_cpu_var?
