@@ -1,2 +1,5 @@
 kmem_cache_create
+ioremap
+ioremap_nocach
+
 
