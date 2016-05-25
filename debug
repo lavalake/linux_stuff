@@ -1,0 +1,43 @@
+buzzz
+debug page alloc
+        /* XXX Additional Kernel implemenation is needed to use this function at
+       * the top of the check_poison_mem() function in mm/debug-pagealloc.c file.
+       * Please check if below codes are implemenated your Linux Kernel first.
+       *
+       * - mm/debug-pagealloc.c
+       *
+       * // for DHD_DEBUG_PAGEALLOC
+       * typedef void (*page_corrupt_cb_t)(void *handle, void *addr_corrupt, uint addr_len);
+       * page_corrupt_cb_t corrupt_cb = NULL;
+       * void *corrupt_cb_handle = NULL;
+       *
+       * void register_page_corrupt_cb(page_corrupt_cb_t cb, void *handle)
+       * {
+       *      corrupt_cb = cb;
+       *      corrupt_cb_handle = handle;
+       * }
+       * EXPORT_SYMBOL(register_page_corrupt_cb);
+         *
+         * extern void dhd_page_corrupt_cb(void *handle, void *addr_corrupt, size_t len);
+         *
+         * static void check_poison_mem(unsigned char *mem, size_t bytes)
+         * {
+         * ......
+         *
+         *      if (!__ratelimit(&ratelimit))
+         *               return;
+         *      else if (start == end && single_bit_flip(*start, PAGE_POISON))
+         *              printk(KERN_ERR "pagealloc: single bit error\n");
+         *      else
+         *              printk(KERN_ERR "pagealloc: memory corruption\n");
+         *
+         *      print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 16, 1, start,
+         *              end - start + 1, 1);
+         *
+         *      // for DHD_DEBUG_PAGEALLOC
+         *      dhd_page_corrupt_cb(corrupt_cb_handle, start, end - start + 1);
+         *
+         *      dump_stack();
+         * }
+         *
+         */
