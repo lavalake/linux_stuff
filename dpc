@@ -1,0 +1,30 @@
+https://www.safaribooksonline.com/library/view/understanding-the-linux/0596005652/ch04s07.html
+The ksoftirqd kernel threads
+In recent kernel versions, each CPU has its own ksoftirqd/n kernel thread (where n is the logical number of the CPU). Each ksoftirqd/n kernel thread runs the ksoftirqd( ) function, which essentially executes the following loop:
+
+    for(;;) {
+        set_current_state(TASK_INTERRUPTIBLE );
+        schedule( );
+        /* now in TASK_RUNNING state */
+        while (local_softirq_pending( )) {
+            preempt_disable();
+            do_softirq( );
+            preempt_enable();
+            cond_resched( );
+        }
+    }When awakened, the kernel thread checks the local_softirq_pending() softirq bit mask and invokes, if necessary, do_softirq( ). If there are no softirqs pending, the function puts the current process in the TASK_INTERRUPTIBLE state and invokes then the cond_resched() function to perform a process switch if required by the current process (flag TIF_NEED_RESCHED of the current thread_info set).
+
+The ksoftirqd/n kernel threads represent a solution for a critical trade-off problem.
+
+Softirq functions may reactivate themselves; in fact, both the networking softirqs and the tasklet softirqs do this. Moreover, external events, such as packet flooding on a network card, may activate softirqs at very high frequency.
+
+The potential for a continuous high-volume flow of softirqs creates a problem that is solved by introducing kernel threads. Without them, developers are essentially faced with two alternative strategies.
+
+The first strategy consists of ignoring new softirqs that occur while do_softirq( ) is running. In other words, the do_softirq( ) function could determine what softirqs are pending when the function is started and then execute their functions. Next, it would terminate without rechecking the pending softirqs. This solution is not good enough. Suppose that a softirq function is reactivated during the execution of do_softirq( ). In the worst case, the softirq is not executed again until the next timer interrupt, even if the machine is idle. As a result, softirq latency time is unacceptable for networking developers.
+
+The second strategy consists of continuously rechecking for pending softirqs. The do_softirq( ) function could keep checking the pending softirqs and would terminate only when none of them is pending. While this solution might satisfy networking developers, it can certainly upset normal users of the system: if a high-frequency flow of packets is received by a network card or a softirq function keeps activating itself, the do_softirq( ) function never returns, and the User Mode programs are virtually stopped.
+
+The ksoftirqd/n kernel threads try to solve this difficult trade-off problem. The do_softirq( ) function determines what softirqs are pending and executes their functions. After a few iterations, if the flow of softirqs does not stop, the function wakes up the kernel thread and terminates (step 10 of _ _do_softirq( )). The kernel thread has low priority, so user programs have a chance to run; but if the machine is idle, the pending softirqs are executed quickly.
+
+2. tq_struct
+3. kfifo
