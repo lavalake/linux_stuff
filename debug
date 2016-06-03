@@ -41,3 +41,37 @@ debug page alloc
          * }
          *
          */
+
+
+printk
+        http://stackoverflow.com/questions/25873754/printk-interrupt-disabling-and-locking
+         have a question regarding the implementation of printk() in the 3.10 kernel. I see it calls local_irq_save at the beginning. I see it then calls raw_spin_lock(&logbuf_lock). What's the purpose of logbuf_lock if interrupts have been already disabled prior to this? Is it because even though interrupts are disabled on the current CPU other CPUs can still call printk so they need to be stopped from writing to the log buffer?
+
+Basically I have three questions:
+
+I see printk acquires logbuf_lock and writes to the log buffer and then tries to grab the console semaphore and releases logbuf_lock. Then inside console_unlock inside a loop it acquires logbuf_lock and disables interrupts, then releases logbuf_lock and calls the console drivers, and then restores interrupts. What's the purpose of this locking/disabling interrupt sequence?
+
+I see comments in printk() about the log buffer possibly being filled up again so the buffer may have to get flushed to the console again. How would this situation occur given all the locking I asked about in #1 above?
+
+If code on only 1 CPU were to be calling printk() at any given moment, could interrupts still be handled on other cores in an SMP system? I'm trying to also understand the impact of printk on interrupt latency
+
+        The printk function is not just inserting into a queue/buffer -- assuming the log level is high enough, the output from printk will be emitted to the console immediately, as part of the call to printk. This is especially slow if the console is, say, on a serial port. But in any case, printk does introduce pretty substantial overhead and can affect timing.
+
+If you have a timing critical place where you want to get some debug output, you can look at using the trace_printk function in modern kernels. This actually does just put input into the trace ringbuffer, and you can read it later. Take a look at this article for full details.
+
+Debugging the kernel using Ftrace 
+        http://lwn.net/Articles/365835/
+debugfs
+        /sys/kernel/debug
+/proc fs
+        create your own /proc/file to expose kernel variable to user space
+when can not use printk        
+http://kernelnewbies.kernelnewbies.narkive.com/9GTNGn6x/printk-in-interrupt-handlers
+The lock-up happens indepently of whether the message is printed on
+the console or just logged to the buffer. Also, the printk was not
+placed in __switch_to() but rather in schedule() itself. The problem
+is that printk may call try_to_wake_up() which in turn will try to
+acquire a runqueue lock ( of the CPU where klogd ran the last time).
+That could be the excact same lock that schedule() already holds.
+This, of course, deadlocks the CPU as recursive locking of spin locks
+is not supported in the kernel.
