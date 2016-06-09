@@ -1,2 +1,104 @@
 http://blog.scoutapp.com/articles/2014/11/04/restricting-process-cpu-usage-using-nice-cpulimit-and-cgroups
 RESTRICTING PROCESS CPU USAGE USING NICE, CPULIMIT, AND CGROUPS
+
+https://tournasdimitrios1.wordpress.com/2011/02/07/passing-parameters-to-the-kernel-at-run-time-time-on-linux/
+Sometimes, you might need to  change some of the Linux kernel behavior , a previous article demonstrated how to pass parameters to the kernel at boot time . At run-time we can  load / unload kernel modules , or change some parameters to squeeze out a bit more performance  . The key point for tuning the kernel is the virtual file-system directory  ” /proc ”  , most of the files in /proc are read-only representations of information about your system. There is an exception to this rule: the files in /proc/sys/. The /proc/sys/ directory contains a tree of writable files, each of which represents a different kernel setting.
+
+There are too many kernel settings in /proc/sys/ to cover what each of them does here. Complete coverage for the curious is available in the Red Hat Enterprise Linux Reference Guide.
+In total , there are over 500 tunable parameters on an average Linux system . If you want to examine that list more closely issue the command
+“sysctl -a > param-file” . Open that file with your favorite editor .
+
+While files in /proc/sys/ can be written to and read from directly, the most common method for manipulating them is with the sysctl command. This command allows you to turn on / off numerous kernel parameters on the fly or you can edit a specific file to tune those same parameters . When using sysctl, the settings in /proc/sys/ are referred to by a period-delimited name instead of a filesystem path. The basic usage of the command is  :
+sysctl  options  path.to.seting=value
+
+First example : The setting in /proc/sys/fs/file-max which, dictates the maximum number of files that may be opened at once, is referred to by sysctl as simply fs.file-max.
+
+sysctrl  -w  fs.file-max=60000
+The maximum number of open files on this system is now 60,000 (default is 52000)
+Second example : Say you want to re-enable <CTL><Alt><Del> that some distributions have disabled . First let’s make sure your distribution has disabled this functionality , do this with the command :
+
+sysctrl  kernel.ctrl-alt-del 
+what you should see as output is :  kernel-ctrl-alt-del=0
+sysctrl -w kernel.ctrl-alt-del=1
+You can , of course , reset this value again passing the value 0
+Third example : The setting in /proc/sys/net/ipv4/ip_forward which, dictates the routing functionality .
+
+sysctrl  -w  net.ipv4.ip_forward=1
+Now  your Linux box  will act as a router (of course , also the routing table must be configured )
+However, because /proc is a pseudo-filesystem, existing only in RAM, all non-default settings will be lost when the system reboots. In order to make changes to /proc/sys/ persistent, sysctl must be configured to automatically reinstate settings when the system boots up. Custom sysctl commands can be stored in the /etc/sysctl.conf file, which is read in during system initialization by the sysctl -p command, which is run by /etc/rc.d/rc.sysinit. Each line in sysctl.conf follows the format “path.to.setting = value”. The default sysctl.conf usually looks like this.
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+# Kernel sysctl configuration file for Red Hat Linux
+#
+# For binary values, 0 is disabled, 1 is enabled.  See sysctl(8) and
+# sysctl.conf(5) for more details.
+ 
+# Controls IP packet forwarding
+net.ipv4.ip_forward = 0
+ 
+# Controls source route verification
+net.ipv4.conf.default.rp_filter = 1
+ 
+# Do not accept source routing
+net.ipv4.conf.default.accept_source_route = 0
+ 
+# Controls the System Request debugging functionality of the kernel
+kernel.sysrq = 0
+ 
+# Controls whether core dumps will append the PID to the core filename
+# Useful for debugging multi-threaded applications
+kernel.core_uses_pid = 1
+ 
+# Controls the use of TCP syncookies
+net.ipv4.tcp_syncookies = 1
+ 
+# Controls the maximum size of a message, in bytes
+kernel.msgmnb = 65536
+ 
+# Controls the default maxmimum size of a mesage queue
+kernel.msgmax = 65536
+ 
+# Controls the maximum shared segment size, in bytes
+kernel.shmmax = 4294967295
+ 
+# Controls the maximum number of shared memory segments, in pages
+kernel.shmall = 268435456
+To make our change to fs.file-max permanent, we would add the following line to /etc/sysctl.conf.
+# Increase maximum filehandles
+fs.file-max = 60000
+
+Be aware that altering sysctl.conf has no affect until the system is rebooted or sysctl -p is run manually.
