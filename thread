@@ -3,3 +3,12 @@ semaphore
   down
   up
   down_interruptable
+Kernel Threads
+  http://www.linux-mag.com/id/2195/
+  daemonize()
+  reparent_to_init()
+  allow_signal()
+  add_wait_queue()
+  set_current_state
+  schedule()
+
