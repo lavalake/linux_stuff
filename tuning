@@ -90,6 +90,15 @@ net.ipv4.tcp_syncookies = 1
 kernel.msgmnb = 65536
  
 # Controls the default maxmimum size of a mesage queue
+
+
+
+
+2.
+https://iniy.org/?p=539
+Guide to limits.conf / ulimit /open file descriptors under linux
+Why does linux have an open-file-limit?
+
 kernel.msgmax = 65536
  
 # Controls the maximum shared segment size, in bytes
