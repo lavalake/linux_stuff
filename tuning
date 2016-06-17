@@ -111,3 +111,7 @@ To make our change to fs.file-max permanent, we would add the following line to 
 fs.file-max = 60000
 
 Be aware that altering sysctl.conf has no affect until the system is rebooted or sysctl -p is run manually.
+
+
+Tuning 10Gb network cards on Linux
+https://wiki.chipp.ch/twiki/pub/CmsTier3/NodeTypeFileServerHPDL380G7/ols2009-pages-169-1842.pdf
