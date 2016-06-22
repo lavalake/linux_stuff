@@ -28,3 +28,10 @@ The ksoftirqd/n kernel threads try to solve this difficult trade-off problem. Th
 
 2. tq_struct
 3. kfifo
+4 softirq
+      HI_SOFTIRQ
+      TIMER_SOFTIRQ
+      NET_TX_SOFTIRQ
+      NET_RX_SOFTIRQ
+      SCSI_SOFTIRQ
+      TASKLET_SOFTIRQ
