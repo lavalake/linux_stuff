@@ -1,0 +1,3 @@
+awk
+reponame=$(echo $url | awk -F/ '{print $NF}' | sed -e 's/.git$//')
+sed
