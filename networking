@@ -1,1 +1,3 @@
 ksoftirqd : per-cpu kernel thread
+
+https://wiki.linuxfoundation.org/images/1/1c/Network_data_flow_through_kernel.png
