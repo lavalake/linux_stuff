@@ -1,0 +1,389 @@
+Linux 下的两个特殊的文件 -- /dev/null 和 /dev/zero 简介及对比
+http://blog.csdn.net/longerzone/article/details/12948925
+
+登录 | 注册
+longerzone的专栏
+读万卷书穷通世理，行万里路明德亲民
+目录视图摘要视图订阅
+【CSDN会员专属福利】OpenStack Days China 大会门票，先到先得     【收藏】Html5 精品资源汇集     我们为什么选择Java    
+ Linux 下的两个特殊的文件 -- /dev/null 和 /dev/zero 简介及对比
+标签： Linuxdevnulldevzero
+2013-10-22 17:00 3183人阅读 评论(0) 收藏 举报
+ 分类：  Linux 内核知识学习/总结（20）  
+版权声明：本文为博主原创文章，未经博主允许不得转载。
+目录(?)[+]
+1、概论 -- 来自维基的解释
+/dev/null  ： 在类Unix系统中，/dev/null，或称空设备，是一个特殊的设备文件，它丢弃一切写入其中的数据（但报告写入操作成功），读取它则会立即得到一个EOF。
+在程序员行话，尤其是Unix行话中，/dev/null 被称为位桶(bit bucket)或者黑洞(black hole)。空设备通常被用于丢弃不需要的输出流，或作为用于输入流的空文件。这些操作通常由重定向完成。
+
+
+/dev/zero  ： 在类UNIX 操作系统中, /dev/zero 是一个特殊的文件，当你读它的时候，它会提供无限的空字符(NULL, ASCII NUL, 0x00)。
+其中的一个典型用法是用它提供的字符流来覆盖信息，另一个常见用法是产生一个特定大小的空白文件。BSD就是通过mmap把/dev/zero映射到虚地址空间实现共享内存的。可以使用mmap将/dev/zero映射到一个虚拟的内存空间，这个操作的效果等同于使用一段匿名的内存（没有和任何文件相关）。
+
+2、 /dev/null 的日常使用
+把/dev/null看作"黑洞"。它等价于一个只写文件，并且所有写入它的内容都会永远丢失，而尝试从它那儿读取内容则什么也读不到。然而, /dev/null对命令行和脚本都非常的有用。
+
+我们都知道  cat $filename  会输出filename对应的文件内容（输出到标准输出）
+而使用         cat $filename >/dev/null 
+则不会得到任何信息，因为我们将本来该通过标准输出显示的文件信息重定向到了 /dev/null 中，so what will you get ?
+使用  cat $filename 1>/dev/null 也会得到同样的效果，因为默认重定向的 1 就是标准输出。  如果你对 shell 脚本或者重定向比较熟悉的话，应该会联想到 2 ，也即标准错误输出。
+我们使用 cat $filename  时如果filename对应的文件不存在，系统肯定会报错： “ cat: filename: 没有那个文件或目录 ” 。
+如果我们不想看到错误输出呢？我们可以禁止标准错误:   cat $badname 2>/dev/null
+我们可以通过下面这个测试来更加深刻的理解/dev/null ：
+[plain] view plain copy
+<span style="font-size:18px">$cat test.txt   
+just for test  
+$cat test.txt >/dev/null   
+$cat test.txt 1>/dev/null   
+$cat test2.txt   
+cat: test2.txt: 没有那个文件或目录  
+$cat test2.txt >/dev/null   
+cat: test2.txt: 没有那个文件或目录  
+$cat test2.txt 2>/dev/null   
+$  
+</span>  
+
+有些时候，我并不想看道任何输出，我只想看到这条命令运行是不是正常，那么我们可以同时禁止标准输出和标准错误的输出:    
+       cat $filename 2>/dev/null >/dev/null
+所以：
+* 如果"$filename"不存在，将不会有任何错误信息提示，
+* 如果"$filename"存在, 文件的内容不会打印到标准输出。
+* 因此, 上面的代码根本不会输出任何信息，当只想测试命令的退出码而不想有任何输出时非常有用。
+
+下一步，我们使用 echo $? 查看上条命令的退出码：0为命令正常执行，1-255为有出错。
+
+当然，使用   cat $filename &>/dev/null   也可以达到  cat $filename 2>/dev/null >/dev/null 一样的效果。
+[plain] view plain copy
+<span style="font-size:18px">$cat test2.txt 2>/dev/null   
+$cat test.txt 2>/dev/null >/dev/null   
+$echo $?  
+0  
+$cat test2.txt 2>/dev/null >/dev/null   
+$echo $?  
+1  
+$cat test.txt &>/dev/null  
+$echo $?  
+0  
+</span>  
+
+
+有时候，我们需要删除一些文件的内容而不删除文件本身：（这个方法可以用来删除日志文件，在我的Debian笔记本上我给 /var 盘配的空间有些过小，有时候就需要手动使用这个操作来清空日志）    
+ # cat /dev/null > /var/log/messages
+ # : > /var/log/messages   有同样的效果，但不会产生新的进程。（因为:是内建的）
+
+ 
+下面的实例中，使用/dev/null 来删除cookie 并且不再使用cookie
+[plain] view plain copy
+<span style="font-size:18px">    if [ -f ~/.netscape/cookies ]       # 如果存在则删除，删除后才可以添加软链接  
+     then  
+       rm -f ~/.netscape/cookies  
+     fi  
+       
+     ln -s /dev/null ~/.netscape/cookies     </span>  
+
+其中，cookies的目录是可以变换的，比如说我自己电脑上的firefox的cookie目录为： ~/.mozilla/firefox/nah4b6di.default/cookies*
+
+3、/dev/zero 的日常使用
+像/dev/null一样，/dev/zero也是一个伪文件，但它实际上产生连续不断的null的流（二进制的零流，而不是ASCII型的）。写入它的输出会丢失不见，/dev/zero主要的用处是用来创建一个指定长度用于初始化的空文件，像临时交换文件。
+
+比如说，在我的前一篇博客中（《尝试安装Chrome OS的新版本 Vanilla & 安装之后U盘遇到的问题解决》），提到我使用dd 制作的U盘系统，而我的U盘有16G，而制作好后，系统盘只占了2.5G，而其他的空间（将近12G）都无发使用。我只能使用  dd if=/dev/zero of=/dev/sdb bs=4M 来重新给我整个U盘清零。
+
+脚本实例 1. 用/dev/zero创建一个交换临时文件
+[plain] view plain copy
+<span style="font-size:18px">#!/bin/bash  
+# 创建一个交换文件，参数为创建的块数量（不带参数则为默认），一块为1024B（1K）  
+  
+ROOT_UID=0         # Root 用户的 $UID 是 0.  
+E_WRONG_USER=65    # 不是 root?  
+  
+FILE=/swap  
+BLOCKSIZE=1024  
+MINBLOCKS=40  
+SUCCESS=0  
+  
+# 这个脚本必须用root来运行,如果不是root作出提示并退出  
+if [ "$UID" -ne "$ROOT_UID" ]  
+then  
+  echo; echo "You must be root to run this script."; echo  
+  exit $E_WRONG_USER  
+fi   
+    
+  
+blocks=${1:-$MINBLOCKS}          # 如果命令行没有指定，则设置为默认的40块.  
+# 上面这句等同如：  
+# --------------------------------------------------  
+# if [ -n "$1" ]  
+# then  
+#   blocks=$1  
+# else  
+#   blocks=$MINBLOCKS  
+# fi  
+# --------------------------------------------------  
+  
+if [ "$blocks" -lt $MINBLOCKS ]  
+then  
+  blocks=$MINBLOCKS              # 最少要有 40 个块长，如果带入参数比40小，将块数仍设置成40  
+fi   
+  
+echo "Creating swap file of size $blocks blocks (KB)."  
+dd if=/dev/zero of=$FILE bs=$BLOCKSIZE count=$blocks # 把零写入文件.  
+  
+mkswap $FILE $blocks             # 将此文件建为交换文件（或称交换分区）.  
+swapon $FILE                     # 激活交换文件.  
+  
+echo "Swap file created and activated."  
+exit $SUCCESS  
+</span>  
+
+运行效果我们可以看到： 
+[plain] view plain copy
+<span style="font-size:18px">long@Raring:/tmp$ vim testswap.sh  
+long@Raring:/tmp$ chmod +x testswap.sh             
+long@Raring:/tmp$ sudo ./testswap.sh             
+[sudo] password for long:    
+long@Raring:/tmp$ ./testswap.sh             
+  
+You must be root to run this script.  
+  
+long@Raring:/tmp$ sudo ./testswap.sh             
+[sudo] password for long:       
+Creating swap file of size 40 blocks (KB).  
+记录了40+0 的读入  
+记录了40+0 的写出  
+40960字节(41 kB)已复制，0.000904021 秒，45.3 MB/秒  
+正在设置交换空间版本 1，大小 = 36 KiB  
+无标签， UUID=3e59eddf-098f-454d-9507-aba55f434a8c  
+Swap file created and activated.  
+</span>  
+
+关于 /dev/zero 的另一个应用是为特定的目的而用零去填充一个指定大小的文件，如挂载一个文件系统到环回设备 （loopback device） 或"安全地" 删除一个文件。
+脚本实例2. 创建ramdisk
+[plain] view plain copy
+<span style="font-size:18px">#!/bin/bash  
+# ramdisk.sh  
+  
+# "ramdisk"是系统RAM内存的一段，它可以被当成是一个文件系统来操作.  
+# 优点：存取速度非常快 (包括读和写).  
+# 缺点: 易失性, 当计算机重启或关机时会丢失数据.  
+#       会减少系统可用的RAM.  
+#  
+# 那么ramdisk有什么作用呢?  
+# 保存一个较大的数据集在ramdisk, 比如一张表或字典,这样可以加速数据查询, 因为在内存里查找比在磁盘里查找快得多.  
+  
+E_NON_ROOT_USER=70             # 必须用root来运行.  
+ROOTUSER_NAME=root  
+  
+MOUNTPT=/mnt/ramdisk  
+SIZE=2000                      # 2K 个块 (可以合适的做修改)  
+BLOCKSIZE=1024                 # 每块有1K (1024 byte) 的大小  
+DEVICE=/dev/ram0               # 第一个 ram 设备  
+  
+username=`id -nu`  
+if [ "$username" != "$ROOTUSER_NAME" ]  
+then  
+  echo "Must be root to run ""`basename $0`""."  
+  exit $E_NON_ROOT_USER  
+fi  
+  
+if [ ! -d "$MOUNTPT" ]         # 测试挂载点是否已经存在了,  
+then                           #+ 如果这个脚本已经运行了好几次了就不会再建这个目录了  
+  mkdir $MOUNTPT               #+ 因为前面已经建立了.  
+fi  
+  
+dd if=/dev/zero of=$DEVICE count=$SIZE bs=$BLOCKSIZE # 把RAM设备的内容用零填充.  
+                                                      # 为何需要这么做?  
+mke2fs $DEVICE                 # 在RAM设备上创建一个ext2文件系统.  
+mount $DEVICE $MOUNTPT         # 挂载设备.  
+chmod 777 $MOUNTPT             # 使普通用户也可以存取这个ramdisk，但是, 只能由root来缷载它.  
+  
+echo """$MOUNTPT"" now available for use."  
+# 现在 ramdisk 即使普通用户也可以用来存取文件了.  
+# 注意, ramdisk是易失的, 所以当计算机系统重启或关机时ramdisk里的内容会消失.  
+#  
+# 重启之后, 运行这个脚本再次建立起一个 ramdisk.  
+# 仅重新加载 /mnt/ramdisk 而没有其他的步骤将不会正确工作.  
+  
+# 如果加以改进, 这个脚本可以放在 /etc/rc.d/rc.local，以使系统启动时能自动设立一个ramdisk。这样很合适速度要求高的数据库服务器.  
+exit 0  
+</span>  
+运行起来效果如下：
+[plain] view plain copy
+<span style="font-size:18px">long@Raring:/tmp$ vim ramdisk.sh  
+long@Raring:/tmp$ chmod +x ramdisk.sh  
+long@Raring:/tmp$ ./ramdisk.sh  
+Must be root to run ramdisk.sh.  
+long@Raring:/tmp$ sudo ./ramdisk.sh  
+记录了2000+0 的读入  
+记录了2000+0 的写出  
+2048000字节(2.0 MB)已复制，0.0113732 秒，180 MB/秒  
+mke2fs 1.42.8 (20-Jun-2013)  
+Discarding device blocks: 完成  
+文件系统标签=  
+OS type: Linux  
+块大小=1024 (log=0)  
+分块大小=1024 (log=0)  
+Stride=0 blocks, Stripe width=0 blocks  
+16384 inodes, 65536 blocks  
+3276 blocks (5.00%) reserved for the super user  
+第一个数据块=1  
+Maximum filesystem blocks=67108864  
+8 block groups  
+8192 blocks per group, 8192 fragments per group  
+2048 inodes per group  
+Superblock backups stored on blocks:  
+    8193, 24577, 40961, 57345  
+  
+Allocating group tables: 完成  
+正在写入inode表: 完成  
+Writing superblocks and filesystem accounting information: 完成  
+  
+/mnt/ramdisk now available for use.</span>  
+
+
+最后值得一提的是，ELF二进制文件利用了/dev/zero。
+
+
+========================================================
+本文参考：  维基百科关于/dev/null 和 /dev/zero 的解释
+                    《/dev/zero 和 /dev/null 的区别》       --- 这篇文章原作已无从考究，网上很多
+
+
+顶
+1
+踩
+0
+ 
+ 
+上一篇尝试安装Chrome OS的新版本 Vanilla & 安装之后U盘遇到的问题解决
+下一篇理解 Linux 的硬链接与软链接
+我的同类文章
+Linux 内核知识学习/总结（20）
+•linux虚拟文件系统概述2014-05-21阅读837
+•多角度分析为什么 Linux 的硬连接不能指向目录2014-04-17阅读2560
+•谈谈Linux打补丁的原理以及如何判别打补丁的错误 --- 从补丁学内核2013-11-26阅读4662
+•Linux 下 Login 和 Logout 详解2013-10-17阅读2804
+•Linux系统调用2013-10-09阅读1446
+•请善用工具审核您的内核代码:）2014-04-17阅读3193
+•浅谈Linux中系统调用代码相关2014-04-14阅读1115
+•理解 Linux 的硬链接与软链接2013-10-28阅读962
+•使用autotools自动生成Makefile并在此之上使用dh-make生成可发布的deb程序包（详解）2013-10-14阅读2172
+•UBIFS 白皮书 -- UBIFS设计简介2013-05-04阅读1702
+更多文章
+猜你在找
+最牛JavaScript课程软件测试基础Linux高薪入门实战精品 (上)Jmeter性能测试全程实战iOS8开发技术（Swift版）：iOS基础知识
+查看评论
+
+  暂无评论
+
+您还没有登录,请[登录]或[注册]
+* 以上用户言论只代表其个人观点，不代表CSDN网站的观点或立场
+核心技术类目
+全部主题 Hadoop AWS 移动游戏 Java Android iOS Swift 智能硬件 Docker OpenStack VPN Spark ERP IE10 Eclipse CRM JavaScript 数据库 Ubuntu NFC WAP jQuery BI HTML5 Spring Apache .NET API HTML SDK IIS Fedora XML LBS Unity Splashtop UML components Windows Mobile Rails QEMU KDE Cassandra CloudStack FTC coremail OPhone CouchBase 云计算 iOS6 Rackspace Web App SpringSide Maemo Compuware 大数据 aptech Perl Tornado Ruby Hibernate ThinkPHP HBase Pure Solr Angular Cloud Foundry Redis Scala Django Bootstrap
+个人资料
+ 访问我的空间 
+i龙家小少
+ 
+ 1
+访问：516789次
+积分：6411
+等级： 
+排名：第2413名
+原创：90篇转载：77篇译文：6篇评论：85条
+文章搜索
+
+博客专栏
+	python 学习之路
+文章：17篇
+阅读：68162
+	Linux 的那些点点滴滴
+文章：10篇
+阅读：22671
+文章分类
+Linux 测试/追踪/调试技术(8)
+Linux shell脚本学习(19)
+Linux 使用、技巧&故障解决&工具使用(35)
+Linux 驱动相关&UIO研究(4)
+Linux 系统安装、配置、编译&测评(13)
+Linux 内核知识学习/总结(21)
+Linux C编程&编程相关(4)
+Linux 学习资料搜集(4)
+系统优化(1)
+实时热点问题(20)
+其他(19)
+Linux 安全性分析(1)
+Python 语言学习(17)
+计算机发展简史(2)
+读书推荐(1)
+树莓派玩耍笔记(5)
+Linux虚拟化实践(1)
+爱好测评(1)
+我的空间
+
+记录我的生活 
+IT技术博客
+CoolShell
+TinyLab
+Linux Kgdb gdb debug
+IBM 博客
+51CTO学院_Linux
+51CTO学院_Python
+51CTO黑客专区
+烟雨林 -- 程序员找工作
+July结构之法算法之道, (算法大牛)
+sevenster(算法牛人)
+ACM + acshiryu
+有趣的网站:
+虎嗅网
+人人都是产品经理
+伯乐在线
+果壳网
+知乎
+Knewone -- 一个有趣分享新鲜东东的网站 
+极客社区 
+阅读排行
+Ubuntu下创建vim+Taglist+cscope+ctags组合编辑器(25330)
+细数Linux下制作U盘系统启动盘的方法！(18081)
+Linux 下安装python软件包（pip、nose、virtualenv、distribute ）(15295)
+python 学习笔记 8 -- Python下调用Linux的Shell命令(14039)
+如何使用谷歌“以图找图”图片搜索功能(12967)
+Ubuntu 下安装WPS for Linux(10999)
+学习Python 免费电子书 TOP10（含下载）(10978)
+升级Ubuntu 13.04 有感(10869)
+Fedora 19的U盘安装 以及简单配置(10323)
+如何在VirtualBox 虚拟机中挂载共享文件夹(9809)
+最新评论
+如何在VirtualBox 虚拟机中挂载共享文件夹
+u010221220: 楼主能详细讲解下如何实现主机和客户机之间如何实现文件拖拽操作吗，我像你这样设置的文件仍然没法拖拽
+说说"红黑树"
+xublog: 完全没必要转，让它留在维基或者留在你脑子里
+多角度分析为什么 Linux 的硬连接不能指向目录
+辰辰爸的技术博客: 灰常灰常不错的东东，谢谢博主翻译与分享，已阅已收藏！
+Linux 下安装python软件包（pip、nose、virtualenv、distribute ）
+ZHAOs: 楼主大神，解决了困扰几天的问题！谢谢
+UBIFS 白皮书 -- UBIFS设计简介
+a75564143: 龙少：您好 能帮我看看一下两条错误是怎么造成的么？谢谢了！ UBIFS error (pid 99)...
+Ubuntu下创建vim+Taglist+cscope+ctags组合编辑器
+简单并快乐着: 不错不错，以前一直怪Linux下看代码，写代码不舒服，不够友好，以为vim 很难用，其实仔细操作一下...
+Ubuntu下创建vim+Taglist+cscope+ctags组合编辑器
+i龙家小少: @DovSnier:说白了，这些就是给vim 配了个强有力的读写代码环境，相当于IDE，而Windo...
+Ubuntu下创建vim+Taglist+cscope+ctags组合编辑器
+dovsnier: 弱弱的问一下 window 环境下可以配置这些插件不
+Shell 脚本学习资料搜集
+fengchen0301: 挺好。
+细数Linux下制作U盘系统启动盘的方法！
+zhugw2012: 两种方法试了 都没能成功最后用下面的命令成功了sudo usb-creator-gtk我的是Ubun...
+评论排行
+Ubuntu下创建vim+Taglist+cscope+ctags组合编辑器(17)
+使用Ubuntu12.04创建无线WiFi热点，供手机上网(6)
+几个Linux终端下超赞的小命令(5)
+请善用工具审核您的内核代码:）(5)
+Ubuntu 下安装WPS for Linux(4)
+说说"红黑树"(4)
+Debian安装全攻略(4)
+升级Ubuntu 13.04 有感(4)
+程序员必看的十大电影(3)
+部分电脑安装升级 ubuntu 12.04 后无法挂起问题的解决(挂起无法唤醒同样有效)(3)
+公司简介|招贤纳士|广告服务|银行汇款帐号|联系方式|版权声明|法律顾问|问题报告|合作伙伴|论坛反馈
+网站客服杂志客服微博客服webmaster@csdn.net400-600-2320|北京创新乐知信息技术有限公司 版权所有|江苏乐知网络技术有限公司 提供商务支持
+京 ICP 证 09002463 号|Copyright © 1999-2014, CSDN.NET, All Rights Reserved GongshangLogo
+
