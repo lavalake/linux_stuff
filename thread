@@ -11,4 +11,21 @@ Kernel Threads
   add_wait_queue()
   set_current_state
   schedule()
+  http://blog.sina.com.cn/s/blog_b65e8d3d0101drs7.html
+  http://bdxnote.blog.163.com/blog/static/84442352012427113929430/
+  3).等待完成量:
+void wait_for_completion(struct completion* comp):
+该函数等待一个完成量被唤醒;该函数会阻塞调用进程,如果所等待的完成量没有被唤醒,那就一直阻塞下去,而且不会被信号打断;
+int wait_for_completion_interruptible(struct completion* comp):
+该函数等待一个完成量被唤醒;但是它可以被外部信号打断;
+int wait_for_completion_killable(struct completion* comp):
+该函数等待一个完成量被唤醒;但是它可以被kill信号打断;
+4).唤醒完成量:
+void complete(struct completion* comp):
+该函数只唤醒一个正在等待完成量comp的执行单元;
+void complete_all(struct completion* comp):
+该函数唤醒所有正在等待同一个完成量comp的执行单元;
+NORET_TYPE void complete_and_exit(struct completion* comp, long code):
+该函数唤醒一个正在等待完成量comp的执行单元,并退出,code为退出码;
+
 
