@@ -1,0 +1,216 @@
+http://blog.csdn.net/do2jiang/article/details/5450839
+ [经典]Linux内核中ioremap映射的透彻理解
+标签： linux内核structfileiomodulelinux
+2010-04-05 01:52 47698人阅读 评论(19) 收藏 举报
+ 分类： L.Linux 开发（182）   P.OS-操作系统 &amp; 内核（89）  
+　　几乎每一种外设都是通过读写设备上的寄存器来进行的，通常包括控制寄存器、状态寄存器和数据寄存器三大类，外设的寄存器通常被连续地编址。根据CPU体系结构的不同，CPU对IO端口的编址方式有两种：
+
+　　（1）I/O映射方式（I/O-mapped）
+
+　　典型地，如X86处理器为外设专门实现了一个单独的地址空间，称为"I/O地址空间"或者"I/O端口空间"，CPU通过专门的I/O指令（如X86的IN和OUT指令）来访问这一空间中的地址单元。
+
+　　（2）内存映射方式（Memory-mapped）
+
+　　RISC指令系统的CPU（如ARM、PowerPC等）通常只实现一个物理地址空间，外设I/O端口成为内存的一部分。此时，CPU可以象访问一个内存单元那样访问外设I/O端口，而不需要设立专门的外设I/O指令。
+
+　　但是，这两者在硬件实现上的差异对于软件来说是完全透明的，驱动程序开发人员可以将内存映射方式的I/O端口和外设内存统一看作是"I/O内存"资源。
+
+　　一般来说，在系统运行时，外设的I/O内存资源的物理地址是已知的，由硬件的设计决定。但是CPU通常并没有为这些已知的外设I/O内存资源的物理地址预定义虚拟地址范围，驱动程序并不能直接通过物理地址访问I/O内存资源，而必须将它们映射到核心虚地址空间内（通过页表），然后才能根据映射所得到的核心虚地址范围，通过访内指令访问这些I/O内存资源。Linux在io.h头文件中声明了函数ioremap（），用来将I/O内存资源的物理地址映射到核心虚地址空间（3GB－4GB）中，原型如下：
+
+void * ioremap(unsigned long phys_addr, unsigned long size, unsigned long flags);
+　　iounmap函数用于取消ioremap（）所做的映射，原型如下：
+
+void iounmap(void * addr);
+　　这两个函数都是实现在mm/ioremap.c文件中。
+
+　　在将I/O内存资源的物理地址映射成核心虚地址后，理论上讲我们就可以象读写RAM那样直接读写I/O内存资源了。为了保证驱动程序的跨平台的可移植性，我们应该使用Linux中特定的函数来访问I/O内存资源，而不应该通过指向核心虚地址的指针来访问。如在x86平台上，读写I/O的函数如下所示：
+
+#define readb(addr) (*(volatile unsigned char *) __io_virt(addr))
+#define readw(addr) (*(volatile unsigned short *) __io_virt(addr))
+#define readl(addr) (*(volatile unsigned int *) __io_virt(addr))
+
+#define writeb(b,addr) (*(volatile unsigned char *) __io_virt(addr) = (b))
+#define writew(b,addr) (*(volatile unsigned short *) __io_virt(addr) = (b))
+#define writel(b,addr) (*(volatile unsigned int *) __io_virt(addr) = (b))
+
+#define memset_io(a,b,c) memset(__io_virt(a),(b),(c))
+#define memcpy_fromio(a,b,c) memcpy((a),__io_virt(b),(c))
+#define memcpy_toio(a,b,c) memcpy(__io_virt(a),(b),(c))
+　　最后，我们要特别强调驱动程序中mmap函数的实现方法。用mmap映射一个设备，意味着使用户空间的一段地址关联到设备内存上，这使得只要程序在分配的地址范围内进行读取或者写入，实际上就是对设备的访问。
+
+　　笔者在Linux源代码中进行包含"ioremap"文本的搜索，发现真正出现的ioremap的地方相当少。所以笔者追根索源地寻找I/O操作的物理地址转换到虚拟地址的真实所在，发现Linux有替代ioremap的语句，但是这个转换过程却是不可或缺的。
+
+　　譬如我们再次摘取S3C2410这个ARM芯片RTC（实时钟）驱动中的一小段：
+
+static void get_rtc_time(int alm, struct rtc_time *rtc_tm)
+{
+　spin_lock_irq(&rtc_lock);
+　if (alm == 1) {
+　　rtc_tm->tm_year = (unsigned char)ALMYEAR & Msk_RTCYEAR;
+　　rtc_tm->tm_mon = (unsigned char)ALMMON & Msk_RTCMON;
+　　rtc_tm->tm_mday = (unsigned char)ALMDAY & Msk_RTCDAY;
+　　rtc_tm->tm_hour = (unsigned char)ALMHOUR & Msk_RTCHOUR;
+　　rtc_tm->tm_min = (unsigned char)ALMMIN & Msk_RTCMIN;
+　　rtc_tm->tm_sec = (unsigned char)ALMSEC & Msk_RTCSEC;
+　}
+　else {
+　　read_rtc_bcd_time:
+　　rtc_tm->tm_year = (unsigned char)BCDYEAR & Msk_RTCYEAR;
+　　rtc_tm->tm_mon = (unsigned char)BCDMON & Msk_RTCMON;
+　　rtc_tm->tm_mday = (unsigned char)BCDDAY & Msk_RTCDAY;
+　　rtc_tm->tm_hour = (unsigned char)BCDHOUR & Msk_RTCHOUR;
+　　rtc_tm->tm_min = (unsigned char)BCDMIN & Msk_RTCMIN;
+　　rtc_tm->tm_sec = (unsigned char)BCDSEC & Msk_RTCSEC;
+
+　　if (rtc_tm->tm_sec == 0) {
+　　　/* Re-read all BCD registers in case of BCDSEC is 0.
+　　　See RTC section at the manual for more info. */
+　　　goto read_rtc_bcd_time;
+　　}
+　}
+　spin_unlock_irq(&rtc_lock);
+
+　BCD_TO_BIN(rtc_tm->tm_year);
+　BCD_TO_BIN(rtc_tm->tm_mon);
+　BCD_TO_BIN(rtc_tm->tm_mday);
+　BCD_TO_BIN(rtc_tm->tm_hour);
+　BCD_TO_BIN(rtc_tm->tm_min);
+　BCD_TO_BIN(rtc_tm->tm_sec);
+
+　/* The epoch of tm_year is 1900 */
+　rtc_tm->tm_year += RTC_LEAP_YEAR - 1900;
+
+　/* tm_mon starts at 0, but rtc month starts at 1 */
+　rtc_tm->tm_mon--;
+}
+　　I/O操作似乎就是对ALMYEAR、ALMMON、ALMDAY定义的寄存器进行操作，那这些宏究竟定义为什么呢？
+
+#define ALMDAY bRTC(0x60)
+#define ALMMON bRTC(0x64)
+#define ALMYEAR bRTC(0x68)
+　　其中借助了宏bRTC，这个宏定义为：
+
+#define bRTC(Nb) __REG(0x57000000 + (Nb))
+　　其中又借助了宏__REG，而__REG又定义为：
+
+# define __REG(x) io_p2v(x)
+　　最后的io_p2v才是真正"玩"虚拟地址和物理地址转换的地方： 
+
+#define io_p2v(x) ((x) | 0xa0000000)
+　　与__REG对应的有个__PREG：
+
+# define __PREG(x) io_v2p(x)
+　　与io_p2v对应的有个io_v2p：
+
+#define io_v2p(x) ((x) & ~0xa0000000)
+　　可见有没有出现ioremap是次要的，关键问题是有无虚拟地址和物理地址的转换！
+　　下面的程序在启动的时候保留一段内存，然后使用ioremap将它映射到内核虚拟空间，同时又用remap_page_range映射到用户虚拟空间，这样一来，内核和用户都能访问。如果在内核虚拟地址将这段内存初始化串"abcd"，那么在用户虚拟地址能够读出来：
+
+/************mmap_ioremap.c**************/
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+#include <linux/mm.h>
+#include <linux/wrapper.h> /* for mem_map_(un)reserve */
+#include <asm/io.h> /* for virt_to_phys */
+#include <linux/slab.h> /* for kmalloc and kfree */
+
+MODULE_PARM(mem_start, "i");
+MODULE_PARM(mem_size, "i");
+
+static int mem_start = 101, mem_size = 10;
+static char *reserve_virt_addr;
+static int major;
+
+int mmapdrv_open(struct inode *inode, struct file *file);
+int mmapdrv_release(struct inode *inode, struct file *file);
+int mmapdrv_mmap(struct file *file, struct vm_area_struct *vma);
+
+static struct file_operations mmapdrv_fops =
+{
+　owner: THIS_MODULE, mmap: mmapdrv_mmap, open: mmapdrv_open, release:
+　mmapdrv_release,
+};
+
+int init_module(void)
+{
+　if ((major = register_chrdev(0, "mmapdrv", &mmapdrv_fops)) < 0)
+　{
+　　printk("mmapdrv: unable to register character device/n");
+　　return ( - EIO);
+　}
+　printk("mmap device major = %d/n", major);
+
+　printk("high memory physical address 0x%ldM/n", virt_to_phys(high_memory) /
+1024 / 1024);
+
+　reserve_virt_addr = ioremap(mem_start *1024 * 1024, mem_size *1024 * 1024);
+　printk("reserve_virt_addr = 0x%lx/n", (unsigned long)reserve_virt_addr);
+　if (reserve_virt_addr)
+　{
+　　int i;
+　　for (i = 0; i < mem_size *1024 * 1024; i += 4)
+　　{
+　　　reserve_virt_addr[i] = 'a';
+　　　reserve_virt_addr[i + 1] = 'b';
+　　　reserve_virt_addr[i + 2] = 'c';
+　　　reserve_virt_addr[i + 3] = 'd';
+　　}
+　}
+　else
+　{
+　　unregister_chrdev(major, "mmapdrv");
+　　return - ENODEV;
+　}
+　return 0;
+}
+
+/* remove the module */
+void cleanup_module(void)
+{
+　if (reserve_virt_addr)
+　　iounmap(reserve_virt_addr);
+
+　unregister_chrdev(major, "mmapdrv");
+　return ;
+}
+
+int mmapdrv_open(struct inode *inode, struct file *file)
+{
+　MOD_INC_USE_COUNT;
+　return (0);
+}
+
+int mmapdrv_release(struct inode *inode, struct file *file)
+{
+　MOD_DEC_USE_COUNT;
+　return (0);
+}
+
+int mmapdrv_mmap(struct file *file, struct vm_area_struct *vma)
+{
+　unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
+　unsigned long size = vma->vm_end - vma->vm_start;
+
+　if (size > mem_size *1024 * 1024)
+　{
+　　printk("size too big/n");
+　　return ( - ENXIO);
+　}
+
+　offset = offset + mem_start * 1024 * 1024;
+
+　/* we do not want to have this area swapped out, lock it */
+　vma->vm_flags |= VM_LOCKED;
+　if (remap_page_range(vma, vma->vm_start, offset, size, PAGE_SHARED))
+　{
+　　printk("remap page range failed/n");
+　　return - ENXIO;
+　}
+　return (0);
+}
+　　remap_page_range函数的功能是构造用于映射一段物理地址的新页表，实现了内核空间与用户空间的映射，其原型如下： 
+
+int remap_page_range(vma_area_struct *vma, unsigned long from, unsigned long to, unsigned long size, pgprot_tprot);
+　　使用mmap最典型的例子是显示卡的驱动，将显存空间直接从内核映射到用户空间将可提供显存的读写效率。
+      （在内核驱动程序的初始化阶段，通过ioremap（）将物理地址映射到内核虚拟空间；在驱动程序的mmap系统调用中，使用remap_page_range()将该块ROM映射到用户虚拟空间。这样内核空间和用户空间都能访问这段被映射后的虚拟地址。）
