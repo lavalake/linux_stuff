@@ -1,3 +1,12 @@
+
+Mem alloc
+	kmalloc
+	kmem_cache_create
+	kmem_pool
+	__get_free_pages
+	vmalloc
+	alloc_pages
+
 kmalloc
 	GFP_KERNEL: run in kernel process context. Calling this function will cause the process to sleep. can not call in atomic context
 	GFP_ATOMIC: when run in non-process contxt which can not sleep, such as interrupt service, tasklet, timer, can not call GFP_KERNEL. should use GFP_ATOMIC. If there is not enough memory, allocation will fail.
