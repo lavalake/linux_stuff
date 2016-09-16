@@ -26,6 +26,9 @@ kmalloc\vmalloc\ioremap
 	
 per cpu variable
 	no locking
+	
+RW Semaphore
+
 large buffer
 	scatter\gather
 io port
