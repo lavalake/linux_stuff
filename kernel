@@ -5,6 +5,7 @@ mknod
 kmod
 modprobe
 insmod
+preemption:2.6
 
 http://blog.csdn.net/zhoudaxia/article/category/1083057/1
 
