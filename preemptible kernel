@@ -1,0 +1,103 @@
+
+9down vote	Imagine the simple view of preemptive multi-tasking. We have two user tasks, both of which are running all the time without using any I/O or performing kernel calls. Those two tasks don't have to do anything special to be able to run on a multi-tasking operating system. The kernel, typically based on a timer interrupt, simply decides that it's time for one task to pause to let another one run. The task in question is completely unaware that anything happened.
+However, most tasks make occasional requests of the kernel via syscalls. When this happens, the same user context exists, but the CPU is running kernel code on behalf of that task.
+Older Linux kernels would never allow preemption of a task while it was busy running kernel code. (Note that I/O operations always voluntarily re-schedule. I'm talking about a case where the kernel code has some CPU-intensive operation like sorting a list.)
+If the system allows that task to be preempted while it is running kernel code, then we have what is called a "preemptive kernel." Such a system is immune to unpredictable delays that can be encountered during syscalls, so it might be better suited for embedded or real-time tasks.
+For example, if on a particular CPU there are two tasks available, and one takes a syscall that takes 5ms to complete, and the other is an MP3 player application that needs to feed the audio pipe every 2ms, you might hear stuttering audio.
+The argument against preemption is that all kernel code that might be called in task context must be able to survive preemption-- there's a lot of poor device driver code, for example, that might be better off if it's always able to complete an operation before allowing some other task to run on that processor. (With multi-processor systems the rule rather than the exception these days, all kernel code must be re-entrant, so that argument isn't as relevant today.) Additionally, if the same goal could be met by improving the syscalls with bad latency, perhaps preemption is unnecessary.
+A compromise is CONFIG_PREEMPT_VOLUNTARY, which allows a task-switch at certain points inside the kernel, but not everywhere. If there are only a small number of places where kernel code might get bogged down, this is a cheap way of reducing latency while keeping the complexity manageable.
+shareimprove this answer
+answered Mar 12 '11 at 17:18
+
+ 
+
+Eric Seppanen
+4,0901419
+
+	add a comment
+up vote4down vote	Traditional unix kernels had a single lock, which was held by a thread while kernel code was running. Therefore no other kernel code could interrupt that thread.
+This made designing the kernel easier, since you knew that while one thread using kernel resources, no other thread was. Therefore the different threads cannot mess up each others work.
+In single processor systems this doesn't cause too many problems.
+However in multiprocessor systems, you could have a situation where several threads on different processors or cores all wanted to run kernel code at the same time. This means that depending on the type of workload, you could have lots of processors, but all of them spend most of their time waiting for each other.
+In Linux 2.6, the kernel resources were divided up into much smaller units, protected by individual locks, and the kernel code was reviewed to make sure that locks were only held while the corresponding resources were in use. So now different processors only have to wait for each other if they want access to the same resource (for example hardware resource).
+shareimprove this answer
+answered Mar 12 '11 at 15:54
+
+ 
+
+Ben
+22.5k23567
+
+	5	 
+	The granularity of locking has nothing to do with whether the kernel is preemptive. While Linux is constantly moving toward better scalability and finer-grained locking, the situation you're talking about hasn't existed for ten years. – Eric Seppanen Mar 12 '11 at 16:49
+
+add a comment
+up vote4down vote	The preemption allows the kernel to give the IMPRESSION of parallelism: you've got only one processor (let's say a decade ago), but you feel like all your processes are running simulaneously. That's because the kernel preempts (ie, take the execution out of) the execution from one process to give it to the next one (maybe according to their priority).
+EDIT Not preemptive kernels wait for processes to give back the hand (ie, during syscalls), so if your process computes a lot of data and doesn't call any kind of yield function, the other processes won't be able to execute to execute their calls. Such systems are said to be cooperativebecause they ask for the cooperation of the processes to ensure the equity of the execution time
+EDIT 2 The main goal of preemption is to improve the reactivity of the system among multiple tasks, so that's good for end-users, whereas on the other-hand, servers want to achieve the highest througput, so they don't need it: (from the Linux kernel configuration)
+•	Preemptible kernel (low-latency desktop)
+•	Voluntary kernel preemption (desktop)
+•	No forced preemption (server)
+shareimprove this answer
+edited Mar 12 '11 at 16:14
+answered Mar 12 '11 at 15:54
+
+ 
+
+Kevin
+2,82211747
+
+	add a comment
+up vote3down vote	It means that the operating system scheduler is free to suspend the execution of the running processes to give the CPU to another process whenever it wants; the normal way to do this is to give to each process that is waiting for the CPU a "quantum" of CPU time to run. After it has expired the scheduler takes back the control (and the running process cannot avoid this) to give another quantum to another process.
+This method is often compared with the cooperative multitasking, in which processes keep the CPU for all the time they need, without being interrupted, and to let other applications run they have to call explicitly some kind of "yield" function; naturally, to avoid giving the feeling of the system being stuck, well-behaved applications will yield the CPU often. Still,if there's a bug in an application (e.g. an infinite loop without yield calls) the whole system will hang, since the CPU is completely kept by the faulty program.
+Almost all recent desktop OSes use preemptive multitasking, that, even if it's more expensive in terms of resources, is in general more stable (it's more difficult for a sigle faulty app to hang the whole system, since the OS is always in control). On the other hand, when the resources are tight and the application are expected to be well-behaved, cooperative multitasking is used. Windows 3 was a cooperative multitasking OS; a more recent example can be RockBox, an opensource PMP firmware replacement.
+shareimprove this answer
+answered Mar 12 '11 at 16:05
+
+ 
+
+Matteo Italia
+71k893178
+
+	add a comment
+up vote1down vote	The linux kernel is monolithic and give a little computing timespan to all the running process sequentially. It means that the processes (eg. the programs) do not run concurrently, but they are given a give timespan regularly to execute their logic. The main problem is that some logic can take longer to terminate and prevent the kernel to allow time for the next process. This results in system "lags".
+A preemtive kernel has the ability to switch context. It means that it can stop a "hanging" process even if it is not finished, and give the computing time to the next process as expected. The "hanging" process will continue to execute when its time has come without any problem.
+Practically, it means that the kernel has the ability to achieve tasks in realtime, which is particularly interesting for audio recording and editing.
+The ubuntu studio districution packages a preemptive kernel as well as a buch of quality free software devoted to audio and video edition.
+shareimprove this answer
+edited Jan 18 '14 at 0:06
+answered Mar 12 '11 at 15:55
+
+ 
+
+Damien
+339514
+
+	  	 
+	Isn't a preemptive kernel somehow bad for realtime? without preemtion, your Audio/Video task will have all the processor for itself until it give it up, so it would more convenient for such constraints? – Kevin Mar 12 '11 at 16:06
+
+  	 
+	@Kevin: it's the reverse. A preemptive kernel means that the latencies due to other processes running on kernel mode are lower. What you really care about most of the time is latencies. – ninjalj Mar 14 '11 at 0:37
+
+  	 
+	@Kevin: With a preemptive kernel, a higher priority task (eg. your audio/video player) can preempt a lower priority task, even if the latter is running in kernel mode. This means that the audio/video player gets to run when it needs to. – caf Mar 20 '11 at 9:54
+
+  	 
+	@ninjalj @caf thanks, it makes sense now :) – Kevin Mar 21 '11 at 8:18
+
+add a comment
+up vote0down vote	I think it became preemptive from 2.6. preemptive means when a new process is ready to run, the cpu will be allocated to the new process, it doesn't need the running process be co-operative and give up the cpu.
+shareimprove this answer
+answered Mar 12 '11 at 15:53
+
+ 
+
+Amirali Sanatinia
+1762
+
+	add a comment
+up vote0down vote	Linux kernel is preemptive means that The kernel supports preemption.
+For example, there are two processes P1(higher priority) and P2(lower priority) which are doing read system calls and they are running in kernel mode. Suppose P2 is running and is in the kernel mode and P2 is scheduled to run.
+If kernel preemption is available, then preemption can happen at the kernel level i.e P2 can get preempted and but to sleep and the P1 can continue to run.
+If kernel preemption is not available, since P2 is in kernel mode, system simply waits till P2 is complete and then
+
