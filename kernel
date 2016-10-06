@@ -10,6 +10,7 @@ smp
 spin_lock : auto disable preemption
 disable_preemption: used for non-smp senario
 get_cpu/put_cpu : disable/enable preemption
+BKL: http://www.informatica.co.cr/linux-scalability/research/acrobat/020628_bkl.pdf
 
 http://blog.csdn.net/zhoudaxia/article/category/1083057/1
 
