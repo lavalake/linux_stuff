@@ -1,3 +1,8 @@
-ksoftirqd : per-cpu kernel thread
+1. ksoftirqd : per-cpu kernel thread
 
-https://wiki.linuxfoundation.org/images/1/1c/Network_data_flow_through_kernel.png
+    https://wiki.linuxfoundation.org/images/1/1c/Network_data_flow_through_kernel.png
+2. skb buff
+    https://people.cs.clemson.edu/~westall/853/notes/skbuff.pdf
+    a. alloc_skb allocate skb buff from a cache by calling kmem_cache_alloc
+       skb data is allocated from memory by calling kmalloc
+    b. dev_alloc_skb is used by device drivers and meant to be called in intrrupt handler
