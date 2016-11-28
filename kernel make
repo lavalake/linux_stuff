@@ -1,0 +1,21 @@
+https://kernelnewbies.org/KernelBuild
+How to remove old kernels in Fedora 22/23 (self.linux4noobs)
+
+submitted 1 year ago * by Simmo3D
+
+Hey everyone. Im just wondering how to remove the old 4.2.0 kernel in Fedora 23 as my system has 4.2.1 running. Also, after removing an old kernel, how can I stop it from still being displayed at boot? Its always pre-highlighting the 4.2.0 kernel and I have to manually select 4.2.1 to boot.
+
+Is it as simple as: dnf remove kernel-4.2.0-300.f23.x86_64
+
+Followed by
+
+sudo update-grub ?
+
+    1 commentshare
+
+all 1 comments
+sorted by: best
+
+[–]rancid_racer 1 point 11 months ago 
+
+root# grub2-mkconfig -o /boot/grub2/grub.cfg
